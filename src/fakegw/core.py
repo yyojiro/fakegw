@@ -3,11 +3,7 @@
 from scapy.all import Ether, ARP, conf, sniff, send, srp
 import sys
 import threading
-import signal
 import logging
-
-logging.basicConfig(format='%(asctime)s:%(levelname)s:%(message)s',
-                    level=logging.DEBUG)
 
 
 def restore_target(gateway_ip, gateway_mac, target_ip, target_mac):
@@ -48,14 +44,17 @@ def send_fake_arp(gateway_ip, gateway_mac, target_ip, target_mac, stop_event):
     return
 
 
-# テスト用
-def debug_callback(packet):
-    logging.debug(packet.show())
-    pass
-
-
 def start_fakegw(gateway_ip=None, target_ip=None, interface=None,
-                  bpf_filter=None, callback=debug_callback):
+                 bpf_filter=None, callback=None):
+    """
+    ARPパケット偽装して投げます。
+    :param gateway_ip: 通信相手A
+    :param target_ip: 通信相手B
+    :param interface: インターフェース名
+    :param bpf_filter: BPFフィルタ形式の文字列
+    :param callback: パケット処理する関数
+    :return: None
+    """
     # インタフェースの設定
     if interface is not None:
         conf.iface = interface
@@ -76,7 +75,7 @@ def start_fakegw(gateway_ip=None, target_ip=None, interface=None,
     else:
         logging.info("Target %s is at %s" % (target_ip, target_mac))
 
-    # スレッドの起動
+    # 偽ARPを投げるスレッド作成
     stop_event = threading.Event()
     poison_thread = threading.Thread(target=send_fake_arp,
                                      args=(gateway_ip,
