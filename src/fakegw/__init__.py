@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import sys
@@ -27,7 +27,7 @@ logger = logging.getLogger()
 default_config = {
     'interface': None,
     'gateway_ip': None,
-    'target_ip': None,
+    'target_ips': None,
     'callback_module': None
 }
 
@@ -60,8 +60,8 @@ def main(argv=None):
                             dest="interface", help="Interface name")
         parser.add_argument("-g", "--gateway",
                             dest="gateway_ip", help="Gateway IP address")
-        ex_group.add_argument("-t", "--target",
-                              dest="target_ip", help="Target IP address")
+        ex_group.add_argument("-t", "--targets",
+                              dest="target_ips", help="Target IP address(es).")
         parser.add_argument("-p", "--callback",
                             dest="callback_module", help="Path to callback python module")
         ex_group.add_argument("-c", "--conf",
@@ -72,7 +72,7 @@ def main(argv=None):
         args = parser.parse_args()
         interface = args.interface
         gateway_ip = args.gateway_ip
-        target_ip = args.target_ip
+        target_ips = args.target_ips
         callback_path = args.callback_module
         call_back_func = None
 
@@ -89,7 +89,7 @@ def main(argv=None):
             logger = logging.getLogger()
             interface = ini.get('subnet', 'interface')
             gateway_ip = ini.get('subnet', 'gateway_ip')
-            target_ip = ini.get('subnet', 'target_ip')
+            target_ips = ini.get('subnet', 'target_ips')
             callback_path = ini.get('core', 'callback_module')
 
         # load callback module
@@ -114,7 +114,7 @@ def main(argv=None):
 
         # run main
         start_fakegw(gateway_ip=gateway_ip,
-                     target_ip=target_ip,
+                     target_ips=target_ips,
                      interface=interface,
                      callback=call_back_func)
 

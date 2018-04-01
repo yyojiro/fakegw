@@ -33,9 +33,13 @@ python setup.py install
 
 ## 使い方
 
-コマンドラインから下記のように使います。止めるときはctrl+cで止めます。
+コマンドラインから下記のように使います。止めるときはctrl+cで止めます。標的のアドレスはカンマ区切りで複数指定できます。
 
-`fakegw -g <gateway ip> -t <target ip>`
+`fakegw -g <gateway ip> -t <target ip>,<target ip>,...`
+
+gatewayのアドレスは下記のように省略した場合は頑張って自動で探しますが、雑な実装なので下手すると固まります。
+
+`fakegw -t <target ip>`
 
 configファイル指定する場合は以下のようにします。configの書き方はconfig/fakegw.confでも参考に適当にやってください。
 
