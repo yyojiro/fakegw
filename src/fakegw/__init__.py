@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# encoding: utf-8
+# -*- coding: utf-8 -*-
 
 import sys
 import os.path
@@ -8,13 +8,15 @@ import logging, logging.config
 import ConfigParser
 import imp
 from fakegw.core import start_fakegw
+from scapy.all import *
+
 
 __description__ = '''
 fakegw -- arp cache poisonig tool.
 
-This is an packet interceptor which using arp cache poisoning.
+This is a packet interceptor which using arp cache poisoning.
 
-@copyright: Copyright (c) 2018 yyojiro
+@copyright: (c) 2018 yyojiro
 @license: MIT License
 '''
 
@@ -34,6 +36,12 @@ def debug_callback(packet):
     logging.debug(packet.summary())
 
 
+# TODO: implements timeout logic
+def find_gateway():
+    p = sr1(IP(dst="8.8.8.8", ttl=0) / ICMP() / "XXXXXXXXXXX")
+    return p.src
+
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv
@@ -41,7 +49,7 @@ def main(argv=None):
         sys.argv.extend(argv)
 
     try:
-        # Setup argument parser
+        # setup argument parser
         parser = ArgumentParser(description="arg parser test",
                                 formatter_class=RawDescriptionHelpFormatter)
         ex_group = parser.add_mutually_exclusive_group(required=True)
@@ -66,13 +74,14 @@ def main(argv=None):
         gateway_ip = args.gateway_ip
         target_ip = args.target_ip
         callback_path = args.callback_module
+        call_back_func = None
 
         global logger
         if args.verbose:
             logger.setLevel(logging.DEBUG)
             logger.info("Verbose mode on")
             call_back_func = debug_callback
-        # Config
+        # read config
         if args.conf_file is not None:
             ini = ConfigParser.SafeConfigParser(default_config)
             ini.read(args.conf_file)
@@ -83,6 +92,7 @@ def main(argv=None):
             target_ip = ini.get('subnet', 'target_ip')
             callback_path = ini.get('core', 'callback_module')
 
+        # load callback module
         if callback_path is not None:
             if os.path.exists(callback_path) is False:
                 logger.error("%s is not exists." % callback_path)
@@ -96,16 +106,26 @@ def main(argv=None):
             logger.info("call back module '%s' is loaded." % module.__name__)
             call_back_func = module.fakegw_callback
 
+        # search gateway if it not defined
+        if gateway_ip is None or gateway_ip.strip() == "":
+            logger.info("gateway_ip is not defined, try searching gateway.")
+            gateway_ip = find_gateway()
+            logger.info("find gateway %s" % gateway_ip)
+
+        # run main
         start_fakegw(gateway_ip=gateway_ip,
                      target_ip=target_ip,
                      interface=interface,
                      callback=call_back_func)
 
         return 0
+    except AssertionError:
+        logger.error("can not find gateway !")
+        return 1
     except Exception as e:
         logger.error(e)
         return 1
 
 
 if __name__ == "__main__":
-    sys.exit(main('-c ../../config/fakegw.conf'.split()))
+    sys.exit(main())

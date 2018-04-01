@@ -92,14 +92,12 @@ def start_fakegw(gateway_ip=None, target_ip=None, interface=None,
     poison_thread.start()
 
     logger.info("starting sniffer for %s" % target_ip)
-
-    if callback is not None:
-        if bpf_filter is None:
-            bpf_filter = "ip host %s" % target_ip
-        if interface is None:
-            sniff(filter=bpf_filter, prn=callback, store=0)
-        else:
-            sniff(filter=bpf_filter, prn=callback, iface=interface, store=0)
+    if bpf_filter is None:
+        bpf_filter = "ip host %s" % target_ip
+    if interface is None:
+        sniff(filter=bpf_filter, prn=callback, store=0)
+    else:
+        sniff(filter=bpf_filter, prn=callback, iface=interface, store=0)
 
     # thread start
     stop_event.set()
