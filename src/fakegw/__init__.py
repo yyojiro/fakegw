@@ -8,7 +8,6 @@ import logging, logging.config
 import ConfigParser
 import imp
 from fakegw.core import start_fakegw
-from scapy.all import *
 
 
 __description__ = '''
@@ -34,12 +33,6 @@ default_config = {
 
 def debug_callback(packet):
     logging.debug(packet.summary())
-
-
-# TODO: implements timeout logic
-def find_gateway():
-    p = sr1(IP(dst="8.8.8.8", ttl=0) / ICMP() / "XXXXXXXXXXX")
-    return p.src
 
 
 def main(argv=None):
@@ -105,12 +98,6 @@ def main(argv=None):
             module = imp.load_module(module_name, file, path, description)
             logger.info("call back module '%s' is loaded." % module.__name__)
             call_back_func = module.fakegw_callback
-
-        # search gateway if it not defined
-        if gateway_ip is None or gateway_ip.strip() == "":
-            logger.info("gateway_ip is not defined, try searching gateway.")
-            gateway_ip = find_gateway()
-            logger.info("find gateway %s" % gateway_ip)
 
         # run main
         start_fakegw(gateway_ip=gateway_ip,

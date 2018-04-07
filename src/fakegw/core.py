@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from scapy.all import Ether, ARP, conf, sniff, send, srp
+from scapy.all import conf, sniff, send, srp, sr1
+from scapy.layers.inet import IP, ICMP, Ether, ARP
 import sys
 import threading
 import logging
@@ -8,6 +9,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 logger = logging.getLogger()
+
+
+# TODO: implements timeout logic
+def find_gateway():
+    p = sr1(IP(dst="8.8.8.8", ttl=0) / ICMP() / "XXXXXXXXXXX")
+    return p.src
 
 
 def restore_target(gateway_ip, gateway_mac, target_ip, target_mac):
@@ -96,6 +103,12 @@ def start_fakegw(gateway_ip=None, target_ips=None, interface=None,
     if interface is not None:
         conf.iface = interface
     conf.verb = 0
+
+    # search gateway if it not defined
+    if gateway_ip is None or gateway_ip.strip() == "":
+        logger.info("gateway_ip is not defined, try searching gateway.")
+        gateway_ip = find_gateway()
+        logger.info("find gateway %s" % gateway_ip)
 
     # make stop event
     stop_event = threading.Event()
